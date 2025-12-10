@@ -1,4 +1,4 @@
-# Projekt CSP EnviroMonitor
+# Projekt CSP
 
 ## Struktura
 - **Backend**: Aplikacja Python FastAPI, która łączy się z Firebase i serwuje aplikację webową.
