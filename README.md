@@ -47,6 +47,4 @@ Otwórz przeglądarkę pod adresem `http://localhost:8000`.
 
 ## Funkcje
 - Wizualizacja danych w czasie rzeczywistym (Temperatura i Wilgotność).
-- Nowoczesny ciemny interfejs (Dark UI).
-- API Backendowe (`/api/data`) do pobierania danych.
-- Przygotowane miejsce na przyszłe moduły przewidywania AI.
+
