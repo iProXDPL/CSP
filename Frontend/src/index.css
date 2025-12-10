@@ -72,13 +72,17 @@ h1 {
 .temp-val { color: var(--accent-temp); }
 .humid-val { color: var(--accent-humid); }
 
-.graph-container {
-  grid-column: 1 / -1;
-  height: 500px;
-  margin-top: 2rem;
+.charts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+  gap: 1.5rem;
+  margin: 2rem;
 }
 
-/* Allow Recharts elements to overflow (fixes cut-off text) */
+.graph-container {
+  height: 400px;
+}
+
 .recharts-surface {
   overflow: visible !important;
 }
