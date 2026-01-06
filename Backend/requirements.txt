@@ -3,3 +3,8 @@ uvicorn
 firebase-admin
 python-dotenv
 requests
+tensorflow
+pandas
+numpy
+scikit-learn
+joblib

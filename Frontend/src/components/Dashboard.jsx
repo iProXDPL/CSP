@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Brush } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Brush, Legend } from 'recharts';
 
 
 const CustomTooltip = ({ active, payload, label }) => {
@@ -14,7 +14,7 @@ const CustomTooltip = ({ active, payload, label }) => {
         ))}
         {payload.map((entry, index) => (
           <p key={index} style={{ color: entry.color, margin: '4px 0 0 0', fontSize: '0.9rem', fontWeight: 500 }}>
-            {entry.name}: {entry.value}
+            {entry.name}: {typeof entry.value === 'number' ? entry.value.toFixed(2) : entry.value}
           </p>
         ))}
       </div>
@@ -46,7 +46,28 @@ export const Dashboard = ({ data }) => {
   const [displayedData, setDisplayedData] = useState(data);
 
   // Pobierz najnowsze wartości z oryginalnych danych (niezależnie od filtra) - nagłówek zawsze pokazuje LIVE
-  const latest = data.length > 0 ? data[data.length - 1] : { temperature: '--', humidity: '--' };
+  // Szukamy ostatniego punktu, który jest DANYM RZECZYWISTYM (ma temperaturę != null i nie jest wyłącznie predykcją)
+  const latest = useMemo(() => {
+      if (data.length === 0) return { temperature: '--', humidity: '--' };
+      // Szukamy od końca
+      for (let i = data.length - 1; i >= 0; i--) {
+          if (data[i].temperature !== null && data[i].temperature !== undefined) {
+              return data[i];
+          }
+      }
+      return { temperature: '--', humidity: '--' };
+  }, [data]);
+  
+  // Znajdź ostatnią predykcję (najdalszą w przyszłość)
+  const lastPrediction = useMemo(() => {
+      // Szukamy od końca elementu który ma predykcję
+      for (let i = data.length - 1; i >= 0; i--) {
+          if (data[i].predictedTemperature !== null && data[i].predictedTemperature !== undefined) {
+              return data[i];
+          }
+      }
+      return null;
+  }, [data]);
 
   // Niezależne stany Brusha dla każdego wykresu
   const [tempBrush, setTempBrush] = useState({});
@@ -160,12 +181,27 @@ export const Dashboard = ({ data }) => {
     <div>
       <div className="dashboard-grid">
         <div className="card">
-          <div className="metric-label">Temperature</div>
-          <div className="metric-value temp-val">{latest.temperature}°C</div>
+          <div className="metric-label">Aktualna Temp.</div>
+          <div className="metric-value temp-val">{latest.temperature !== null ? latest.temperature : '--'}°C</div>
         </div>
         <div className="card">
-          <div className="metric-label">Humidity</div>
-          <div className="metric-value humid-val">{latest.humidity}%</div>
+          <div className="metric-label">Aktualna Wilg.</div>
+          <div className="metric-value humid-val">{latest.humidity !== null ? latest.humidity : '--'}%</div>
+        </div>
+      </div>
+
+      <div className="dashboard-grid" style={{ marginTop: '1rem' }}>
+        <div className="card" style={{ borderLeft: '4px solid #d97706' }}>
+          <div className="metric-label">Przewidywana Temp. (5 krok)</div>
+          <div className="metric-value temp-val" style={{ color: '#d97706' }}>
+             {lastPrediction ? lastPrediction.predictedTemperature.toFixed(2) : '--'}°C
+          </div>
+        </div>
+        <div className="card" style={{ borderLeft: '4px solid #0891b2' }}>
+          <div className="metric-label">Przewidywana Wilg. (5 krok)</div>
+          <div className="metric-value humid-val" style={{ color: '#0891b2' }}>
+             {lastPrediction ? lastPrediction.predictedHumidity.toFixed(2) : '--'}%
+          </div>
         </div>
       </div>
 
@@ -178,8 +214,9 @@ export const Dashboard = ({ data }) => {
               <XAxis dataKey="time" stroke="#64748b" tick={<CustomAxisTick />} height={80} axisLine={true} tickLine={false} />
               <YAxis stroke="#64748b" tickMargin={10} />
               <Tooltip content={<CustomTooltip />} />
-              <Line isAnimationActive={false} type="monotone" dataKey="temperature" name="Temperatura" stroke="#d97706" dot={false} strokeWidth={2} />
-              <Line isAnimationActive={false} type="monotone" dataKey="predictedTemperature" name="Predykcja" stroke="#d97706" strokeDasharray="5 5" dot={false} strokeWidth={2} />
+              <Legend />
+              <Line connectNulls type="monotone" dataKey="predictedTemperature" name="Predykcja" stroke="#dc2626" strokeDasharray="5 5" dot={true} strokeWidth={2} />
+              <Line connectNulls type="monotone" dataKey="temperature" name="Temperatura" stroke="#ea580c" dot={false} strokeWidth={2} />
               <Brush 
                 dataKey="time" 
                 height={30} 
@@ -201,8 +238,9 @@ export const Dashboard = ({ data }) => {
               <XAxis dataKey="time" stroke="#64748b" tick={<CustomAxisTick />} height={80} axisLine={true} tickLine={false} />
               <YAxis stroke="#64748b" tickMargin={10} />
               <Tooltip content={<CustomTooltip />} />
-              <Line isAnimationActive={false} type="monotone" dataKey="humidity" name="Wilgotność" stroke="#0891b2" dot={false} strokeWidth={2} />
-              <Line isAnimationActive={false} type="monotone" dataKey="predictedHumidity" name="Predykcja" stroke="#0891b2" strokeDasharray="5 5" dot={false} strokeWidth={2} />
+              <Legend />
+              <Line connectNulls type="monotone" dataKey="predictedHumidity" name="Predykcja" stroke="#4f46e5" strokeDasharray="5 5" dot={true} strokeWidth={2} />
+              <Line connectNulls type="monotone" dataKey="humidity" name="Wilgotność" stroke="#0891b2" dot={false} strokeWidth={2} />
               <Brush 
                 dataKey="time" 
                 height={30} 

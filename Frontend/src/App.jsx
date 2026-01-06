@@ -26,7 +26,12 @@ function App() {
              const timePart = d.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
              timeStr = `${datePart}\n${timePart}`;
            }
-           return { ...item, time: timeStr };
+           return { 
+             ...item, 
+             time: timeStr,
+             predictedTemperature: null,
+             predictedHumidity: null 
+           };
         });
         setMeasurements(allMeasurements);
       } else {
@@ -39,16 +44,33 @@ function App() {
             const timePart = d.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
             const timestamp = `${datePart}\n${timePart}`;
 
+            const pointToAdd = { 
+                ...newPoint, 
+                time: timestamp,
+                predictedTemperature: null,
+                predictedHumidity: null
+            };
+
             setMeasurements(prev => {
-               // Sprawdź czy ostatni element ma ten sam timestamp, aby uniknąć duplikatów
-               if (prev.length > 0) {
-                   const lastItem = prev[prev.length - 1];
-                   if (lastItem.timestamp === newPoint.timestamp) {
-                       return prev;
+               // Szukamy indeksu elementu z tym samym timestampem
+               const index = prev.findIndex(item => item.timestamp === newPoint.timestamp);
+
+               if (index !== -1) {
+                   // Jeśli istnieje...
+                   const existingItem = prev[index];
+                   // ...i jest to punkt predykcji (nie ma realnej temperatury), to NADPISUJEMY go danymi realnymi
+                   if (existingItem.temperature === null) {
+                       const newHistory = [...prev];
+                       newHistory[index] = pointToAdd;
+                       return newHistory;
                    }
+                   // Jeśli to był już realny punkt, ignorujemy (duplikat)
+                   return prev;
                }
                
-               const newHistory = [...prev, { ...newPoint, time: timestamp }];
+               // Jeśli nie istnieje, dodajemy nowy
+               const newHistory = [...prev, pointToAdd];
+               newHistory.sort((a, b) => a.timestamp - b.timestamp);
                return newHistory; 
             });
          }
@@ -56,15 +78,88 @@ function App() {
     } catch (error) {
       console.error("Błąd pobierania danych:", error);
     } finally {
-      setLoading(false);
+      if (endpoint === 'all') setLoading(false);
     }
   };
 
   useEffect(() => {
     // Wstępne pobranie całej historii
     fetchData('all');
-    // Odpytywanie o najnowszy co 2 sekundy (użytkownik tak ustawił)
-    const interval = setInterval(() => fetchData('last'), 2000);
+
+    // Funkcja do pobierania predykcji
+    const fetchPredictions = async () => {
+      try {
+        const baseUrl = import.meta.env.VITE_API_URL 
+          ? `${import.meta.env.VITE_API_URL}/api/predict`
+          : (import.meta.env.DEV ? 'http://localhost:8000/api/predict' : '/api/predict');
+        
+        const response = await fetch(baseUrl);
+        const predictions = await response.json();
+        
+        if (Array.isArray(predictions)) {
+            setMeasurements(prev => {
+                // Filtrujemy stan: Zostawiamy tylko potwierdzone dane historyczne (temp != null)
+                // Oraz ewentualnie te predykcje, które NIE są pokryte przez nowe predykcje (rzadki przypadek)
+                // Ale najprościej: bierzemy historię i doklejamy NOWE predykcje.
+                
+                // 1. Weź tylko historię (to co ma wartości)
+                const historyOnly = prev.filter(p => p.temperature !== null);
+                
+                // 2. "Sklejanie" - ostatni punkt historii startem dla predykcji
+                const result = [...historyOnly];
+                
+                if (result.length > 0) {
+                     const lastReal = result[result.length - 1];
+                     // Jeśli ostatni punkt historyczny nie jest w nowych predykcjach, to go nie ruszamy
+                     // Ale musimy zapewnić ciągłość. 
+                     // Najprościej: nowe predykcje są "święte" dla przyszłości.
+                }
+
+                // 3. Dodaj nowe predykcje, ale uważaj na duplikaty z historią (gdyby predykcja nachodziła na czas teraźniejszy)
+                const historyTimestamps = new Set(historyOnly.map(h => h.timestamp));
+                
+                const validPredictions = predictions.filter(p => !historyTimestamps.has(p.timestamp)).map(p => {
+                     let timeStr = 'N/A';
+                     if (p.timestamp) {
+                         const d = new Date(p.timestamp * 1000);
+                         const datePart = d.toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                         const timePart = d.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                         timeStr = `${datePart}\n${timePart}`;
+                     }
+                     return {
+                         ...p,
+                         time: timeStr,
+                         predictedTemperature: p.predicted_temperature, 
+                         predictedHumidity: p.predicted_humidity,
+                         temperature: null,
+                         humidity: null
+                     };
+                });
+                
+                // 4. Łączymy i sortujemy
+                const finalResult = [...result, ...validPredictions];
+                
+                // Fix na "dziurę": Pierwszy punkt predykcji powinien wizualnie łączyć się z ostatnim punktem historii
+                // Ale w Recharts wystarczy 'connectNulls'. 
+                // Jeśli jednak chcemy idealne połączenie w danych:
+                // (Opcjonalne, przy connectNulls=true w Dashboard.jsx nie jest to krytyczne, ale warto dla Brusha)
+                
+                finalResult.sort((a, b) => a.timestamp - b.timestamp);
+                return finalResult;
+            });
+        }
+      } catch (e) {
+        console.error("Błąd pobierania predykcji:", e);
+      }
+    };
+
+    // Odpytywanie o predykcje co 2 sekundy
+    const interval = setInterval(() => {
+        // Możemy też odświeżać 'last' jeśli chcemy live data z czujnika
+        fetchData('last'); 
+        fetchPredictions();
+    }, 2000);
+
     return () => clearInterval(interval);
   }, []);
 
